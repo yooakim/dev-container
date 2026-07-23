@@ -1,0 +1,17 @@
+# Bundled Microsoft/Azure tooling ships pinned runtimes; remove when upstream updates land.
+# Review on Dependabot bumps or weekly rebuilds.
+
+# azure-cli bundled cryptography wheel (GHSA-537c-gmf6-5ccf)
+GHSA-537c-gmf6-5ccf exp:2026-10-01
+
+# sqlpackage bundled .NET runtime (Microsoft.SqlPackage 170.4.83.3)
+CVE-2026-47302 exp:2026-10-01
+CVE-2026-50524 exp:2026-10-01
+CVE-2026-50528 exp:2026-10-01
+CVE-2026-50651 exp:2026-10-01
+CVE-2026-57108 exp:2026-10-01
+
+# azcopy bundled Go/stdlib and otel deps (v10.32.6)
+CVE-2026-39883 exp:2026-10-01
+GHSA-hrxh-6v49-42gf exp:2026-10-01
+CVE-2026-39822 exp:2026-10-01

@@ -105,6 +105,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.event_name == 'pull_request' && env.LOCAL_IMAGE || format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) }}
+          trivyignores: .trivyignore
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
