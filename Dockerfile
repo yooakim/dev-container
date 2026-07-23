@@ -1,26 +1,36 @@
 # ==========================================
-# Stage 1: Build Rust CLI tools from source
+# Stage 1: Fetch Rust CLI tools (prebuilt via cargo-binstall)
 # ==========================================
 FROM rust:slim-bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TIME_STYLE=long-iso
 
-# Install build dependencies including GNU make and C compilers for jemalloc
+# Install curl (to bootstrap cargo-binstall) plus build dependencies that are
+# only needed if binstall has to fall back to compiling a crate from source.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
     build-essential \
     make \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Compile preferred CLI tools from source.
-# Versions are pinned and '--locked' is used so builds are reproducible.
-RUN cargo install lsd@1.2.0 --locked \
-    && cargo install ripgrep@15.2.0 --locked \
-    && cargo install fd-find@10.4.2 --locked \
-    && cargo install bat@0.26.1 --locked \
-    && cargo install zoxide@0.10.0 --locked
+# Install cargo-binstall (itself a prebuilt binary) so we can fetch prebuilt
+# releases of the CLI tools instead of compiling them from source.
+RUN curl -L --proto '=https' --tlsv1.2 -sSf \
+    https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+# Download prebuilt binaries for the pinned versions into /tools.
+# binstall automatically falls back to compiling from source (via the build
+# deps installed above) for any crate that has no prebuilt release available.
+RUN cargo binstall -y --install-path /tools \
+    lsd@1.2.0 \
+    ripgrep@15.2.0 \
+    fd-find@10.4.2 \
+    bat@0.26.1 \
+    zoxide@0.10.0
 
 
 # ==========================================
@@ -72,8 +82,8 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
-# Copy compiled Rust binaries directly from the builder stage
-COPY --from=builder /usr/local/cargo/bin/* /usr/local/bin/
+# Copy the prebuilt Rust CLI binaries directly from the builder stage
+COPY --from=builder /tools/* /usr/local/bin/
 
 USER $USERNAME
 WORKDIR /home/$USERNAME
