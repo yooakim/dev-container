@@ -1,0 +1,22 @@
+# Keep the build context small and reproducible.
+.git
+.github
+.gitignore
+.dockerignore
+README.md
+LICENSE
+docs/
+
+# Never ship local virtual envs or secrets into the image
+.venv/
+venv/
+.env
+.env.*
+.azure/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

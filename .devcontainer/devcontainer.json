@@ -1,0 +1,24 @@
+{
+  "name": "Debian Dev Environment",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "remoteUser": "developer",
+  "workspaceFolder": "/home/developer/app",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/developer/app,type=bind",
+  "mounts": [
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.azure,target=/home/developer/.azure,type=bind"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-azurecli"
+      ]
+    }
+  }
+}
