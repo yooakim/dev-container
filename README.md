@@ -143,6 +143,7 @@ Follow [semver](https://semver.org/): bump the **patch** for fixes, the **minor*
 | **`bat`** | Syntax-highlighted `cat` replacement | Aliased to `cat` |
 | **`zoxide`** | Smart directory navigation | Integrated into shell (`z <folder>`) |
 | **`ripgrep` / `fd`** | Fast file search (`rg`, `fd`) | Prebuilt via cargo-binstall (pinned versions) |
+| **`just`** | Command runner for project tasks | Run `just` / `just --list` in a repo with a `justfile` |
 | **`az`** | Azure CLI | Reads host credentials if mounted |
 | **`azcopy`** | High-performance Azure storage sync | Pre-configured in `/usr/local/bin` |
 | **`sqlpackage`** | Azure SQL dacpac/dacfx deployment | Includes necessary .NET runtime libs |
