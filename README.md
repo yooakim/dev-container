@@ -107,7 +107,7 @@ These images are **development environments**, not minimal production runtimes. 
 ### Verify a signed release
 
 ```bash
-cosign verify ghcr.io/yooakim/dev-cli-python:python/v1.0.0 \
+cosign verify ghcr.io/yooakim/dev-cli-python:0.1.0 \
   --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
   --certificate-identity-regexp='https://github.com/yooakim/dev-container/.github/workflows/.*'
 ```
@@ -120,29 +120,29 @@ The devcontainer bind-mounts host `~/.azure` credentials for convenience. Treat 
 
 ## Versioning & Image Tags
 
-Python releases use **per-image git tags** in the form `python/vX.Y.Z` ([semantic versioning](https://semver.org/)). Each publish generates tags on `ghcr.io/yooakim/dev-cli-python`:
+Python releases use **per-image git tags** in the form `python/vX.Y.Z` ([semantic versioning](https://semver.org/)). CI maps those to Docker image tags on `ghcr.io/yooakim/dev-cli-python` (slashes are not valid in image tag names):
 
-| Tag | Example | Meaning |
+| Git tag | Image tag | Meaning |
 | :--- | :--- | :--- |
-| `python/vX.Y.Z` | `python/v1.2.3` | Exact release, fully immutable |
-| `python/vX.Y` | `python/v1.2` | Latest patch within a minor |
-| `python/vX` | `python/v1` | Latest minor within a major |
-| `latest` | `latest` | Newest **released** version (stable) |
-| `main` | `main` | Newest build of the default branch (bleeding edge) |
-| `sha-<short>` | `sha-9551425` | Exact commit reference |
+| `python/vX.Y.Z` | `X.Y.Z` | Exact release, fully immutable |
+| `python/vX.Y.Z` | `X.Y` | Latest patch within a minor |
+| `python/vX.Y.Z` | `X` | Latest minor within a major |
+| — | `latest` | Newest **released** version (stable) |
+| — | `main` | Newest build of the default branch (bleeding edge) |
+| — | `sha-<short>` | Exact commit reference |
 
 ```bash
-docker pull ghcr.io/yooakim/dev-cli-python:python/v1.2.3   # pin exactly (reproducible)
-docker pull ghcr.io/yooakim/dev-cli-python:python/v1       # latest python/v1.x
-docker pull ghcr.io/yooakim/dev-cli-python:latest          # newest stable release
-docker pull ghcr.io/yooakim/dev-cli-python:main            # bleeding edge
+docker pull ghcr.io/yooakim/dev-cli-python:0.1.0   # pin exactly (reproducible)
+docker pull ghcr.io/yooakim/dev-cli-python:0       # latest 0.x
+docker pull ghcr.io/yooakim/dev-cli-python:latest  # newest stable release
+docker pull ghcr.io/yooakim/dev-cli-python:main    # bleeding edge
 ```
 
 ### Cutting a Python release
 
 ```bash
-git tag -a python/v1.0.0 -m "First stable Python CLI release"
-git push origin python/v1.0.0
+git tag -a python/v0.2.0 -m "Python CLI release"
+git push origin python/v0.2.0
 ```
 
 Follow [semver](https://semver.org/): bump **patch** for fixes, **minor** for new tools/features (backward compatible), and **major** for breaking changes to how the image is used.

@@ -56,7 +56,6 @@ jobs:
             image: dev-cli-python
             local_tag: dev-cli-python:ci
             cache_scope: python
-            semver_prefix: python/v
     outputs:
       python_digest: ${{ steps.build.outputs.digest }}
 
@@ -81,9 +80,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}},prefix=,value=${{ matrix.semver_prefix }}{{version}}
-            type=semver,pattern={{major}}.{{minor}},prefix=,value=${{ matrix.semver_prefix }}{{major}}.{{minor}}
-            type=semver,pattern={{major}},prefix=,value=${{ matrix.semver_prefix }}{{major}}
+            type=match,pattern=python/v(\d+\.\d+\.\d+),group=1
+            type=match,pattern=python/v(\d+\.\d+)\.\d+,group=1
+            type=match,pattern=python/v(\d+)\.\d+\.\d+,group=1
             type=ref,event=branch
             type=ref,event=pr
             type=sha
