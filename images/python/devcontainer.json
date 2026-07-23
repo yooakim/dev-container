@@ -1,9 +1,9 @@
 {
   "name": "Python CLI Dev Environment",
   "build": {
-    "dockerfile": "../docker/Dockerfile",
+    "dockerfile": "../../docker/Dockerfile",
     "target": "python",
-    "context": ".."
+    "context": "../.."
   },
   "remoteUser": "developer",
   "workspaceFolder": "/home/developer/app",

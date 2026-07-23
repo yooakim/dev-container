@@ -20,7 +20,7 @@ ARG STARSHIP_VERSION=1.26.0
 ARG STARSHIP_SHA256=321f0dd7af8340a5f2e6a8fec6538a04f617486f9ec70d878f91c09cd8deef22
 
 # ==========================================
-# Stage 1: Fetch Rust CLI tools (prebuilt via cargo-binstall)
+# Stage: builder — Rust CLI tools (prebuilt via cargo-binstall)
 # ==========================================
 FROM rust:slim-bookworm@${RUST_DIGEST} AS builder
 
@@ -56,13 +56,40 @@ RUN cargo binstall -y --install-path /tools \
     ripgrep@15.2.0 \
     fd-find@10.4.2 \
     bat@0.26.1 \
-    zoxide@0.10.0
+    zoxide@0.10.0 \
+    just@1.57.0
 
 
 # ==========================================
-# Stage 2: Final Development Container
+# Stage: uv-artifact — fetch uv without curl in runtime images
 # ==========================================
-FROM debian:bookworm-slim@${DEBIAN_DIGEST}
+FROM debian:bookworm-slim@${DEBIAN_DIGEST} AS uv-artifact
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG UV_VERSION
+ARG UV_SHA256
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && set -eu; \
+    uv_archive="/tmp/uv.tgz"; \
+    curl -fsSL -o "${uv_archive}" \
+      "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"; \
+    echo "${UV_SHA256}  ${uv_archive}" | sha256sum -c -; \
+    mkdir -p /out \
+    && tar -xzf "${uv_archive}" -C /out --strip-components=1 \
+    && rm "${uv_archive}" \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ==========================================
+# Stage: base — shared runtime (Azure tooling, shell utilities)
+# ==========================================
+FROM debian:bookworm-slim@${DEBIAN_DIGEST} AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -71,17 +98,13 @@ ARG AZCOPY_VERSION
 ARG AZCOPY_SHA256
 ARG SQLPACKAGE_URL
 ARG SQLPACKAGE_SHA256
-ARG UV_VERSION
-ARG UV_SHA256
 ARG STARSHIP_VERSION
 ARG STARSHIP_SHA256
 
 LABEL org.opencontainers.image.source="https://github.com/yooakim/dev-container" \
-      org.opencontainers.image.description="Debian-based dev container with Azure tooling and modern CLI utilities" \
       org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    UV_LINK_MODE=copy \
     TIME_STYLE=long-iso
 
 # Install runtime dependencies, apply security updates, then add Azure CLI repo.
@@ -128,14 +151,8 @@ RUN set -eu; \
     && ln -s /opt/sqlpackage/sqlpackage /usr/local/bin/sqlpackage \
     && rm "${archive}"
 
-# uv and starship — pinned GitHub releases with checksum verification.
+# starship — pinned GitHub release with checksum verification.
 RUN set -eu; \
-    uv_archive="/tmp/uv.tgz"; \
-    curl -fsSL -o "${uv_archive}" \
-      "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"; \
-    echo "${UV_SHA256}  ${uv_archive}" | sha256sum -c -; \
-    tar -xzf "${uv_archive}" -C /usr/local/bin --strip-components=1; \
-    rm "${uv_archive}"; \
     starship_archive="/tmp/starship.tgz"; \
     curl -fsSL -o "${starship_archive}" \
       "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-x86_64-unknown-linux-gnu.tar.gz"; \
@@ -157,16 +174,32 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 COPY --from=builder /tools/* /usr/local/bin/
 
+RUN echo 'eval "$(starship init bash)"' >> /home/$USERNAME/.bashrc \
+    && echo 'eval "$(zoxide init bash)"' >> /home/$USERNAME/.bashrc \
+    && echo 'alias ls="lsd"' >> /home/$USERNAME/.bashrc \
+    && echo 'alias l="lsd"' >> /home/$USERNAME/.bashrc \
+    && echo 'alias la="lsd -a"' >> /home/$USERNAME/.bashrc \
+    && echo 'alias lla="lsd -la"' >> /home/$USERNAME/.bashrc \
+    && echo 'alias lt="lsd --tree"' >> /home/$USERNAME/.bashrc \
+    && echo 'alias cat="bat"' >> /home/$USERNAME/.bashrc \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME
+
+
+# ==========================================
+# Stage: python — base + uv Python tooling
+# ==========================================
+FROM base AS python
+
+LABEL org.opencontainers.image.description="Debian-based Python CLI dev container with Azure tooling and modern CLI utilities"
+
+ENV UV_LINK_MODE=copy
+
+COPY --from=uv-artifact /out/uv /usr/local/bin/uv
+COPY --from=uv-artifact /out/uvx /usr/local/bin/uvx
+
+ARG USERNAME=developer
+
 USER $USERNAME
 WORKDIR /home/$USERNAME
-
-RUN echo 'eval "$(starship init bash)"' >> ~/.bashrc \
-    && echo 'eval "$(zoxide init bash)"' >> ~/.bashrc \
-    && echo 'alias ls="lsd"' >> ~/.bashrc \
-    && echo 'alias l="lsd"' >> ~/.bashrc \
-    && echo 'alias la="lsd -a"' >> ~/.bashrc \
-    && echo 'alias lla="lsd -la"' >> ~/.bashrc \
-    && echo 'alias lt="lsd --tree"' >> ~/.bashrc \
-    && echo 'alias cat="bat"' >> ~/.bashrc
 
 CMD ["/bin/bash"]
