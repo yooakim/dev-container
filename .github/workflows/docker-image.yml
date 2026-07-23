@@ -114,7 +114,6 @@ jobs:
             -v "$GITHUB_WORKSPACE/.trivyignore:/.trivyignore:ro" \
             -v "$GITHUB_WORKSPACE:/workspace" \
             aquasec/trivy:0.36.0 image \
-            --scanners vuln \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             --ignorefile /.trivyignore \
