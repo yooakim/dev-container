@@ -56,7 +56,8 @@ RUN cargo binstall -y --install-path /tools \
     ripgrep@15.2.0 \
     fd-find@10.4.2 \
     bat@0.26.1 \
-    zoxide@0.10.0
+    zoxide@0.10.0 \
+    just@1.57.0
 
 
 # ==========================================
