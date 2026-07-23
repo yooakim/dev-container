@@ -46,10 +46,18 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
+            # Releases (git tag vX.Y.Z): full semver ladder so consumers can
+            # pin at patch, minor, or major granularity.
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Newest build of the default branch (bleeding edge).
+            type=ref,event=branch
+            # Exact, immutable per-commit reference.
             type=sha
+          flavor: |
+            # 'latest' tracks the newest released semver tag, not main.
+            latest=auto
 
       - name: Build and push
         uses: docker/build-push-action@v7
