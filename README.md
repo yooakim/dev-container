@@ -46,6 +46,7 @@ Run with your current directory mounted as the workspace, along with local Azure
 #### **Linux / macOS / WSL:**
 ```bash
 docker run -it --rm \
+  -e UV_PROJECT_ENVIRONMENT=/home/developer/.venv \
   -v "$(pwd):/home/developer/app" \
   -v "$HOME/.azure:/home/developer/.azure" \
   -v "$HOME/.gitconfig:/home/developer/.gitconfig:ro" \
@@ -56,12 +57,15 @@ docker run -it --rm \
 #### **Windows PowerShell:**
 ```powershell
 docker run -it --rm `
+  -e UV_PROJECT_ENVIRONMENT=/home/developer/.venv `
   -v "${PWD}:/home/developer/app" `
   -v "$ENV:USERPROFILE\.azure:/home/developer/.azure" `
   -v "$ENV:USERPROFILE\.gitconfig:/home/developer/.gitconfig:ro" `
   -w /home/developer/app `
   dev-cli-python
 ```
+
+On Linux hosts with **SELinux** enabled, add `:Z` to the workspace volume if you still see permission errors: `-v "$(pwd):/home/developer/app:Z"`.
 
 ---
 
@@ -167,18 +171,34 @@ Follow [semver](https://semver.org/): bump **patch** for fixes, **minor** for ne
 
 ## Python Setup via `uv`
 
-Create and manage isolated Python environments inside the mounted workspace without `root` privileges:
+By default the virtual environment lives at `/home/developer/.venv` inside the container (not in your bind-mounted project directory). That avoids `Operation not permitted` errors when `uv` installs packages on restrictive host mounts.
 
 ```bash
-# Create a venv using a specific Python version (uv downloads it automatically)
-uv venv --python 3.12
+# uv picks up UV_PROJECT_ENVIRONMENT automatically in this image
+uv sync
 
-# Activate environment
-source .venv/bin/activate
-
-# Install dependencies
-uv pip install -r requirements.txt
+# Or activate explicitly
+source /home/developer/.venv/bin/activate
 ```
+
+To use a project-local `.venv` instead (e.g. on the host outside Docker), unset the variable:
+
+```bash
+unset UV_PROJECT_ENVIRONMENT
+uv venv --python 3.12
+source .venv/bin/activate
+```
+
+### Troubleshooting: `Operation not permitted` during `uv sync`
+
+If `uv` fails while copying into `.venv` on a bind mount, keep the venv in the container home:
+
+```bash
+export UV_PROJECT_ENVIRONMENT=/home/developer/.venv
+just check   # or uv sync
+```
+
+Remove any stale workspace `.venv` directory left from an earlier run (`rm -rf .venv`).
 
 ---
 

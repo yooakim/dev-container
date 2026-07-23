@@ -192,12 +192,18 @@ FROM base AS python
 
 LABEL org.opencontainers.image.description="Debian-based Python CLI dev container with Azure tooling and modern CLI utilities"
 
-ENV UV_LINK_MODE=copy
+# Keep the venv on the container filesystem, not the bind-mounted workspace.
+# Host mounts (SELinux, Docker Desktop, NFS, etc.) often block uv's file copies into .venv/.
+ENV UV_PROJECT_ENVIRONMENT=/home/developer/.venv \
+    UV_LINK_MODE=copy
 
 COPY --from=uv-artifact /out/uv /usr/local/bin/uv
 COPY --from=uv-artifact /out/uvx /usr/local/bin/uvx
 
 ARG USERNAME=developer
+
+RUN mkdir -p /home/$USERNAME/.venv \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME/.venv
 
 USER $USERNAME
 WORKDIR /home/$USERNAME

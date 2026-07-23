@@ -6,6 +6,9 @@
     "context": ".."
   },
   "remoteUser": "developer",
+  "remoteEnv": {
+    "UV_PROJECT_ENVIRONMENT": "/home/developer/.venv"
+  },
   "workspaceFolder": "/home/developer/app",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/developer/app,type=bind",
   "mounts": [
@@ -14,7 +17,8 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "python.defaultInterpreterPath": "/home/developer/.venv/bin/python"
       },
       "extensions": [
         "ms-python.python",
