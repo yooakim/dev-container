@@ -11,7 +11,7 @@ My lightweight, safe, and reproducible Debian-based container pre-configured wit
 Build the container image using Docker BuildKit:
 
 ```bash
-docker build -t dev-cli .
+docker build -t dev-container .
 ```
 
 ---
@@ -27,7 +27,7 @@ docker run -it --rm \
   -v "$HOME/.azure:/home/developer/.azure" \
   -v "$HOME/.gitconfig:/home/developer/.gitconfig:ro" \
   -w /home/developer/app \
-  dev-cli
+  dev-container
 ```
 
 #### **Windows PowerShell:**
@@ -37,7 +37,7 @@ docker run -it --rm `
   -v "$ENV:USERPROFILE\.azure:/home/developer/.azure" `
   -v "$ENV:USERPROFILE\.gitconfig:/home/developer/.gitconfig:ro" `
   -w /home/developer/app `
-  dev-cli
+  dev-container
 ```
 
 ---
