@@ -1,0 +1,7 @@
+ignored:
+  # Multi-stage RUN apt-get without version pins is acceptable for transient build deps.
+  - DL3008
+  # We intentionally purge curl/gnupg/unzip in a follow-up RUN after verified downloads.
+  - DL3016
+  # Single-quoted bashrc lines intentionally prevent expansion at build time.
+  - SC2016

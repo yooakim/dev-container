@@ -10,23 +10,47 @@ on:
     # trigger stays pull_request, so cache writes to scope=main are read-only and
     # fail. The push event on main already builds and publishes the merged result.
     types: [opened, synchronize, reopened]
+  schedule:
+    # Weekly rebuild to pick up base-image security patches even without code changes.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 concurrency:
-  # One group per branch/PR ref.
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Only auto-cancel redundant PR builds; let main/tag publish builds finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  LOCAL_IMAGE: dev-container:ci
 
 jobs:
+  hadolint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+          failure-threshold: error
+
   build:
+    needs: hadolint
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      attestations: write
+      id-token: write
+      security-events: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -35,7 +59,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Only log in and push on branch/tag pushes, not on PRs from forks.
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
@@ -50,32 +73,83 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Releases (git tag vX.Y.Z): full semver ladder so consumers can
-            # pin at patch, minor, or major granularity.
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Newest build of the default branch (bleeding edge).
             type=ref,event=branch
-            # PR validation images (not published).
             type=ref,event=pr
-            # Exact, immutable per-commit reference.
             type=sha
           flavor: |
-            # 'latest' tracks the newest released semver tag, not main.
             latest=auto
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ github.event_name == 'pull_request' && 'dev-container:ci' || '' }}
           labels: ${{ steps.meta.outputs.labels }}
-          # PR builds use the merge ref (e.g. 5/merge); push builds use the branch
-          # or tag name. Restore from main on PRs so they benefit from published
-          # cache; only write cache on push (trusted trigger for default branch).
           cache-from: |
             type=gha,scope=${{ github.ref_name }}
             type=gha,scope=main
           cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}', github.ref_name) || '' }}
+          # Attestations produce manifest lists; incompatible with load=true on PR builds.
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+      - name: Pull image for scanning
+        if: github.event_name != 'pull_request'
+        run: docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+
+      - name: Scan image for vulnerabilities
+        env:
+          SCAN_IMAGE: ${{ github.event_name == 'pull_request' && env.LOCAL_IMAGE || format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) }}
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE/.trivyignore:/.trivyignore:ro" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            aquasec/trivy:0.36.0 image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --ignorefile /.trivyignore \
+            --format sarif \
+            --output /workspace/trivy-results.sarif \
+            "$SCAN_IMAGE"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
+
+  sign:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.9.2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign container image
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${DIGEST}"
