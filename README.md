@@ -1,24 +1,47 @@
-# Local Linux Development Environment
+# dev-cli — Local Linux Development Environments
 
-My lightweight, safe, and reproducible Debian-based container pre-configured with modern Rust CLI tools (`lsd`, `ripgrep`, `fd`, `bat`, `zoxide`), Python management (`uv`), and Microsoft Azure developer tooling (`az`, `azcopy`, `sqlpackage`).
+A monorepo of lightweight, reproducible Debian-based dev container images. Each image shares a common base (Azure tooling, modern Rust CLI utilities) and adds language-specific tooling on top.
+
+| Image | GHCR package | Status |
+| :--- | :--- | :--- |
+| **Python** | `ghcr.io/yooakim/dev-cli-python` | Available |
+| **.NET** | `ghcr.io/yooakim/dev-cli-dotnet` | Planned — see [`images/dotnet/README.md`](images/dotnet/README.md) |
+
+> **Migration:** The legacy single image `ghcr.io/yooakim/dev-container` is deprecated. New builds publish to `dev-cli-python`. Pull the new package name for updates; the old package will remain available until removed manually from GHCR.
 
 ---
 
-## Quick Start
+## Repository layout
 
-### 1. Build the Docker Image
-
-Build the container image using Docker BuildKit:
-
-```bash
-docker build -t dev-container .
+```
+docker/
+  Dockerfile          # multi-stage: builder → base → python (+ dotnet later)
+images/
+  python/
+    devcontainer.json # VS Code dev container for Python workflows
+  dotnet/
+    README.md         # placeholder for the future .NET image
+.devcontainer/
+  devcontainer.json   # root entry (builds docker/Dockerfile --target python)
 ```
 
 ---
 
-### 2. Run as Standalone CLI Container
+## Quick Start (Python image)
 
-Run the container with your current directory mounted as the workspace, along with your local Azure CLI credentials and Git configuration:
+### 1. Build the Docker image
+
+Build from the repository root using BuildKit:
+
+```bash
+docker build -f docker/Dockerfile --target python -t dev-cli-python .
+```
+
+---
+
+### 2. Run as standalone CLI container
+
+Run with your current directory mounted as the workspace, along with local Azure CLI credentials and Git configuration:
 
 #### **Linux / macOS / WSL:**
 ```bash
@@ -27,7 +50,7 @@ docker run -it --rm \
   -v "$HOME/.azure:/home/developer/.azure" \
   -v "$HOME/.gitconfig:/home/developer/.gitconfig:ro" \
   -w /home/developer/app \
-  dev-container
+  dev-cli-python
 ```
 
 #### **Windows PowerShell:**
@@ -37,16 +60,16 @@ docker run -it --rm `
   -v "$ENV:USERPROFILE\.azure:/home/developer/.azure" `
   -v "$ENV:USERPROFILE\.gitconfig:/home/developer/.gitconfig:ro" `
   -w /home/developer/app `
-  dev-container
+  dev-cli-python
 ```
 
 ---
 
-### 3. Open in VS Code Devcontainers
+### 3. Open in VS Code Dev Containers
 
-If using VS Code, install the **Dev Containers** extension (`ms-vscode-remote.remote-containers`).
+Install the **Dev Containers** extension (`ms-vscode-remote.remote-containers`).
 
-This repo ships a ready-to-use [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json) that builds from the `Dockerfile`, runs as the non-root `developer` user, and bind-mounts your host `~/.azure` credentials.
+This repo ships [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json) (or [`images/python/devcontainer.json`](images/python/devcontainer.json)) which builds `docker/Dockerfile` with `--target python`, runs as the non-root `developer` user, and bind-mounts host `~/.azure` credentials.
 
 Press `F1` in VS Code and select **Dev Containers: Reopen in Container**.
 
@@ -54,12 +77,12 @@ Press `F1` in VS Code and select **Dev Containers: Reopen in Container**.
 
 ## Continuous Integration
 
-A GitHub Actions workflow ([`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml)) builds the image on every push and pull request, and publishes it to the **GitHub Container Registry** (GHCR) on pushes to `main`/`master` and on version tags (`v*`).
+GitHub Actions ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)) builds and publishes images on push/PR, with a matrix ready for additional images.
 
-The pipeline also:
+The pipeline:
 
-- Lints the `Dockerfile` with **Hadolint**
-- Scans the built image with **Trivy** (fails on unfixed **Critical/High** CVEs)
+- Lints `docker/Dockerfile` with **Hadolint**
+- Scans built images with **Trivy** (fails on unfixed **Critical/High** CVEs)
 - Generates **SBOM** and **SLSA provenance** attestations on publish builds
 - **Signs** published images with **cosign** (keyless via GitHub OIDC)
 - Rebuilds weekly (Mondays 06:00 UTC) to pick up base-image security patches
@@ -69,7 +92,7 @@ The pipeline also:
 
 ## Security
 
-This image is a **development environment**, not a minimal production runtime. Security controls focus on supply-chain integrity, vulnerability gating, and least privilege that still supports day-to-day dev work.
+These images are **development environments**, not minimal production runtimes. Security controls focus on supply-chain integrity, vulnerability gating, and least privilege that still supports day-to-day dev work.
 
 | Control | Implementation |
 | :--- | :--- |
@@ -78,13 +101,13 @@ This image is a **development environment**, not a minimal production runtime. S
 | Pinned base images | `debian:bookworm-slim` and `rust:slim-bookworm` pinned by digest |
 | Verified downloads | azcopy, sqlpackage, uv, starship, and cargo-binstall use pinned versions + SHA256 checks |
 | Pinned Azure CLI | Installed from the Microsoft apt repo at a fixed version |
-| Reduced attack surface | `curl`, `gnupg`, and `unzip` removed from the final image after setup |
+| Reduced attack surface | `curl`, `gnupg`, and `unzip` removed from runtime images after setup |
 | Immutable releases | Prefer semver or `sha-*` tags; verify signatures with cosign |
 
 ### Verify a signed release
 
 ```bash
-cosign verify ghcr.io/yooakim/dev-container:1.0.0 \
+cosign verify ghcr.io/yooakim/dev-cli-python:python/v1.0.0 \
   --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
   --certificate-identity-regexp='https://github.com/yooakim/dev-container/.github/workflows/.*'
 ```
@@ -97,48 +120,41 @@ The devcontainer bind-mounts host `~/.azure` credentials for convenience. Treat 
 
 ## Versioning & Image Tags
 
-Releases are driven by **git tags** using [semantic versioning](https://semver.org/) (`vX.Y.Z`). Each publish generates the following tags on `ghcr.io/yooakim/dev-container`:
+Python releases use **per-image git tags** in the form `python/vX.Y.Z` ([semantic versioning](https://semver.org/)). Each publish generates tags on `ghcr.io/yooakim/dev-cli-python`:
 
 | Tag | Example | Meaning |
 | :--- | :--- | :--- |
-| `X.Y.Z` | `1.2.3` | Exact release, fully immutable |
-| `X.Y` | `1.2` | Latest patch within a minor (gets bug fixes) |
-| `X` | `1` | Latest minor within a major (gets features + fixes) |
+| `python/vX.Y.Z` | `python/v1.2.3` | Exact release, fully immutable |
+| `python/vX.Y` | `python/v1.2` | Latest patch within a minor |
+| `python/vX` | `python/v1` | Latest minor within a major |
 | `latest` | `latest` | Newest **released** version (stable) |
 | `main` | `main` | Newest build of the default branch (bleeding edge) |
 | `sha-<short>` | `sha-9551425` | Exact commit reference |
 
-Choose based on how much you value stability vs. staying current:
-
 ```bash
-docker pull ghcr.io/yooakim/dev-container:1.2.3   # pin exactly (reproducible)
-docker pull ghcr.io/yooakim/dev-container:1        # latest v1.x
-docker pull ghcr.io/yooakim/dev-container:latest   # newest stable release
-docker pull ghcr.io/yooakim/dev-container:main     # bleeding edge
+docker pull ghcr.io/yooakim/dev-cli-python:python/v1.2.3   # pin exactly (reproducible)
+docker pull ghcr.io/yooakim/dev-cli-python:python/v1       # latest python/v1.x
+docker pull ghcr.io/yooakim/dev-cli-python:latest          # newest stable release
+docker pull ghcr.io/yooakim/dev-cli-python:main            # bleeding edge
 ```
 
-### Cutting a release
-
-Create an annotated git tag (or a GitHub Release) and push it — the workflow does the rest:
+### Cutting a Python release
 
 ```bash
-# Option A: git tag
-git tag -a v1.0.0 -m "First stable release"
-git push origin v1.0.0
-
-# Option B: GitHub Release (also creates the tag + release notes)
-gh release create v1.0.0 --generate-notes
+git tag -a python/v1.0.0 -m "First stable Python CLI release"
+git push origin python/v1.0.0
 ```
 
-Follow [semver](https://semver.org/): bump the **patch** for fixes, the **minor** for new tools/features (backward compatible), and the **major** for breaking changes to how the image is used.
+Follow [semver](https://semver.org/): bump **patch** for fixes, **minor** for new tools/features (backward compatible), and **major** for breaking changes to how the image is used.
 
 ---
 
-## Installed Tools & Features
+## Installed Tools & Features (Python image)
 
 | Tool | Description | Usage Note |
 | :--- | :--- | :--- |
 | **`uv`** | Fast Python package & version manager | Runs via `uv venv` and `uv pip` |
+| **`just`** | Command runner / task automation | Prebuilt via cargo-binstall (`justfile` support) |
 | **`lsd`** | Next-gen `ls` replacement | Aliased to `ls`, `l`, `la`, `lla`, `lt` |
 | **`bat`** | Syntax-highlighted `cat` replacement | Aliased to `cat` |
 | **`zoxide`** | Smart directory navigation | Integrated into shell (`z <folder>`) |
@@ -149,7 +165,7 @@ Follow [semver](https://semver.org/): bump the **patch** for fixes, the **minor*
 
 ---
 
-## 🐍 Python Setup via `uv`
+## Python Setup via `uv`
 
 Create and manage isolated Python environments inside the mounted workspace without `root` privileges:
 

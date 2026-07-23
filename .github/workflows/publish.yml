@@ -1,9 +1,9 @@
-name: Build and publish container
+name: Build and publish container images
 
 on:
   push:
     branches: ["main", "master"]
-    tags: ["v*"]
+    tags: ["python/v*"]
   pull_request:
     branches: ["main", "master"]
     # Skip closed: on merge, GITHUB_REF becomes the base branch (main) while the
@@ -21,8 +21,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  LOCAL_IMAGE: dev-container:ci
 
 jobs:
   hadolint:
@@ -36,7 +34,7 @@ jobs:
       - name: Lint Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: Dockerfile
+          dockerfile: docker/Dockerfile
           config: .hadolint.yaml
           failure-threshold: error
 
@@ -49,8 +47,18 @@ jobs:
       attestations: write
       id-token: write
       security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: python
+            target: python
+            image: dev-cli-python
+            local_tag: dev-cli-python:ci
+            cache_scope: python
+            semver_prefix: python/v
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      python_digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -71,11 +79,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},prefix=,value=${{ matrix.semver_prefix }}{{version}}
+            type=semver,pattern={{major}}.{{minor}},prefix=,value=${{ matrix.semver_prefix }}{{major}}.{{minor}}
+            type=semver,pattern={{major}},prefix=,value=${{ matrix.semver_prefix }}{{major}}
             type=ref,event=branch
             type=ref,event=pr
             type=sha
@@ -87,27 +95,29 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: docker/Dockerfile
+          target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: |
             ${{ steps.meta.outputs.tags }}
-            ${{ github.event_name == 'pull_request' && 'dev-container:ci' || '' }}
+            ${{ github.event_name == 'pull_request' && matrix.local_tag || '' }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
-            type=gha,scope=${{ github.ref_name }}
-            type=gha,scope=main
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}', github.ref_name) || '' }}
+            type=gha,scope=${{ matrix.cache_scope }}-${{ github.ref_name }}
+            type=gha,scope=${{ matrix.cache_scope }}-main
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}', matrix.cache_scope, github.ref_name) || '' }}
           # Attestations produce manifest lists; incompatible with load=true on PR builds.
           provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
           sbom: ${{ github.event_name != 'pull_request' }}
 
       - name: Pull image for scanning
         if: github.event_name != 'pull_request'
-        run: docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+        run: docker pull "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}"
 
       - name: Scan image for vulnerabilities
         env:
-          SCAN_IMAGE: ${{ github.event_name == 'pull_request' && env.LOCAL_IMAGE || format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) }}
+          SCAN_IMAGE: ${{ github.event_name == 'pull_request' && matrix.local_tag || format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository_owner, matrix.image, steps.build.outputs.digest) }}
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -118,7 +128,7 @@ jobs:
             --ignore-unfixed \
             --ignorefile /.trivyignore \
             --format sarif \
-            --output /workspace/trivy-results.sarif \
+            --output /workspace/trivy-results-${{ matrix.id }}.sarif \
             "$SCAN_IMAGE"
 
       - name: Upload Trivy scan results
@@ -126,8 +136,8 @@ jobs:
         if: always()
         continue-on-error: true
         with:
-          sarif_file: trivy-results.sarif
-          category: trivy-image
+          sarif_file: trivy-results-${{ matrix.id }}.sarif
+          category: trivy-${{ matrix.id }}
 
   sign:
     needs: build
@@ -150,6 +160,6 @@ jobs:
 
       - name: Sign container image
         env:
-          DIGEST: ${{ needs.build.outputs.digest }}
+          DIGEST: ${{ needs.build.outputs.python_digest }}
         run: |
-          cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${DIGEST}"
+          cosign sign --yes "${{ env.REGISTRY }}/${{ github.repository_owner }}/dev-cli-python@${DIGEST}"
