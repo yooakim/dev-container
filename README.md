@@ -56,11 +56,44 @@ Press `F1` in VS Code and select **Dev Containers: Reopen in Container**.
 
 A GitHub Actions workflow ([`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml)) builds the image on every push and pull request, and publishes it to the **GitHub Container Registry** (GHCR) on pushes to `main`/`master` and on version tags (`v*`).
 
-Pull the published image with:
+---
+
+## Versioning & Image Tags
+
+Releases are driven by **git tags** using [semantic versioning](https://semver.org/) (`vX.Y.Z`). Each publish generates the following tags on `ghcr.io/yooakim/dev-container`:
+
+| Tag | Example | Meaning |
+| :--- | :--- | :--- |
+| `X.Y.Z` | `1.2.3` | Exact release, fully immutable |
+| `X.Y` | `1.2` | Latest patch within a minor (gets bug fixes) |
+| `X` | `1` | Latest minor within a major (gets features + fixes) |
+| `latest` | `latest` | Newest **released** version (stable) |
+| `main` | `main` | Newest build of the default branch (bleeding edge) |
+| `sha-<short>` | `sha-9551425` | Exact commit reference |
+
+Choose based on how much you value stability vs. staying current:
 
 ```bash
-docker pull ghcr.io/<owner>/<repo>:latest
+docker pull ghcr.io/yooakim/dev-container:1.2.3   # pin exactly (reproducible)
+docker pull ghcr.io/yooakim/dev-container:1        # latest v1.x
+docker pull ghcr.io/yooakim/dev-container:latest   # newest stable release
+docker pull ghcr.io/yooakim/dev-container:main     # bleeding edge
 ```
+
+### Cutting a release
+
+Create an annotated git tag (or a GitHub Release) and push it — the workflow does the rest:
+
+```bash
+# Option A: git tag
+git tag -a v1.0.0 -m "First stable release"
+git push origin v1.0.0
+
+# Option B: GitHub Release (also creates the tag + release notes)
+gh release create v1.0.0 --generate-notes
+```
+
+Follow [semver](https://semver.org/): bump the **patch** for fixes, the **minor** for new tools/features (backward compatible), and the **major** for breaking changes to how the image is used.
 
 ---
 
