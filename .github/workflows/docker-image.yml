@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: ["main", "master"]
 
+concurrency:
+  # One group per branch/PR ref.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Only auto-cancel redundant PR builds; let main/tag publish builds finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
