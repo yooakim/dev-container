@@ -101,16 +101,26 @@ jobs:
           provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
           sbom: ${{ github.event_name != 'pull_request' }}
 
+      - name: Pull image for scanning
+        if: github.event_name != 'pull_request'
+        run: docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ github.event_name == 'pull_request' && env.LOCAL_IMAGE || format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) }}
-          trivyignores: .trivyignore
-          format: sarif
-          output: trivy-results.sarif
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-          ignore-unfixed: true
+        env:
+          SCAN_IMAGE: ${{ github.event_name == 'pull_request' && env.LOCAL_IMAGE || format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) }}
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE/.trivyignore:/.trivyignore:ro" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            aquasec/trivy:0.36.0 image \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --ignorefile /.trivyignore \
+            --format sarif \
+            --output /workspace/trivy-results.sarif \
+            "$SCAN_IMAGE"
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v4
