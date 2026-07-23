@@ -24,6 +24,8 @@ ARG STARSHIP_SHA256=321f0dd7af8340a5f2e6a8fec6538a04f617486f9ec70d878f91c09cd8de
 # ==========================================
 FROM rust:slim-bookworm@${RUST_DIGEST} AS builder
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG CARGO_BINSTALL_VERSION
 ARG CARGO_BINSTALL_SHA256
 
@@ -61,6 +63,8 @@ RUN cargo binstall -y --install-path /tools \
 # Stage 2: Final Development Container
 # ==========================================
 FROM debian:bookworm-slim@${DEBIAN_DIGEST}
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG AZURE_CLI_VERSION
 ARG AZCOPY_VERSION
