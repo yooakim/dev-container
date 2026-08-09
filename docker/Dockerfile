@@ -30,7 +30,8 @@ ARG CARGO_BINSTALL_VERSION
 ARG CARGO_BINSTALL_SHA256
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    TIME_STYLE=long-iso
+    TIME_STYLE=long-iso \
+    TZ=Europe/Stockholm
 
 # Build dependencies only needed if binstall falls back to compiling from source.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -105,7 +106,8 @@ LABEL org.opencontainers.image.source="https://github.com/yooakim/dev-container"
       org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    TIME_STYLE=long-iso
+    TIME_STYLE=long-iso \
+    TZ=Europe/Stockholm
 
 # Install runtime dependencies, apply security updates, then add Azure CLI repo.
 RUN apt-get update && apt-get upgrade -y \
